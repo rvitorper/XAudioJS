@@ -13,16 +13,17 @@ Resampler.prototype.initialize = function () {
 		if (this.fromSampleRate == this.toSampleRate) {
 			//Setup a resampler bypass:
 			this.resampler = this.bypassResampler;		//Resampler just returns what was passed through.
+            this.ratioWeight = 1;
 		}
 		else {
-            var ratioWeight = this.fromSampleRate / this.toSampleRate;
+            this.ratioWeight = this.fromSampleRate / this.toSampleRate;
 			if (this.fromSampleRate < this.toSampleRate) {
 				/*
 					Use generic linear interpolation if upsampling,
 					as linear interpolation produces a gradient that we want
 					and works fine with two input sample points per output in this case.
 				*/
-				this.compileLinearInterpolationFunction(ratioWeight);
+				this.compileLinearInterpolationFunction();
 				this.lastWeight = 1;
 			}
 			else {
@@ -31,7 +32,7 @@ Resampler.prototype.initialize = function () {
 					like standard linear interpolation in high downsampling.
 					This is more accurate than linear interpolation on downsampling.
 				*/
-				this.compileMultiTapFunction(ratioWeight);
+				this.compileMultiTapFunction();
 				this.tailExists = false;
 				this.lastWeight = 0;
 			}
@@ -42,7 +43,7 @@ Resampler.prototype.initialize = function () {
 		throw(new Error("Invalid settings specified for the resampler."));
 	}
 }
-Resampler.prototype.compileLinearInterpolationFunction = function (ratioWeight) {
+Resampler.prototype.compileLinearInterpolationFunction = function () {
 	var toCompile = "var bufferLength = buffer.length;\
 	var outLength = this.outputBufferSize;\
 	if ((bufferLength % " + this.channels + ") == 0) {\
@@ -53,7 +54,7 @@ Resampler.prototype.compileLinearInterpolationFunction = function (ratioWeight) 
 			var sourceOffset = 0;\
 			var outputOffset = 0;\
 			var outputBuffer = this.outputBuffer;\
-			for (; weight < 1; weight += " + ratioWeight + ") {\
+			for (; weight < 1; weight += " + this.ratioWeight + ") {\
 				secondWeight = weight % 1;\
 				firstWeight = 1 - secondWeight;";
 	for (var channel = 0; channel < this.channels; ++channel) {
@@ -67,7 +68,7 @@ Resampler.prototype.compileLinearInterpolationFunction = function (ratioWeight) 
 	for (var channel = 0; channel < this.channels; ++channel) {
 		toCompile += "outputBuffer[outputOffset++] = (buffer[sourceOffset" + ((channel > 0) ? (" + " + channel) : "") + "] * firstWeight) + (buffer[sourceOffset + " + (this.channels + channel) + "] * secondWeight);";
 	}
-	toCompile += "weight += " + ratioWeight + ";\
+	toCompile += "weight += " + this.ratioWeight + ";\
 				sourceOffset = Math.floor(weight) * " + this.channels + ";\
 			}";
 	for (var channel = 0; channel < this.channels; ++channel) {
@@ -85,7 +86,7 @@ Resampler.prototype.compileLinearInterpolationFunction = function (ratioWeight) 
 	}";
 	this.resampler = Function("buffer", toCompile);
 }
-Resampler.prototype.compileMultiTapFunction = function (ratioWeight) {
+Resampler.prototype.compileMultiTapFunction = function () {
 	var toCompile = "var bufferLength = buffer.length;\
 	var outLength = this.outputBufferSize;\
 	if ((bufferLength % " + this.channels + ") == 0) {\
@@ -103,7 +104,7 @@ Resampler.prototype.compileMultiTapFunction = function (ratioWeight) {
 			var currentPosition = 0;\
 			do {\
 				if (alreadyProcessedTail) {\
-					weight = " + ratioWeight + ";";
+					weight = " + this.ratioWeight + ";";
 	for (channel = 0; channel < this.channels; ++channel) {
 		toCompile += "output" + channel + " = 0;"
 	}
@@ -135,7 +136,7 @@ Resampler.prototype.compileMultiTapFunction = function (ratioWeight) {
 				}\
 				if (weight <= 0) {";
 	for (channel = 0; channel < this.channels; ++channel) {
-		toCompile += "outputBuffer[outputOffset++] = output" + channel + " / " + ratioWeight + ";"
+		toCompile += "outputBuffer[outputOffset++] = output" + channel + " / " + this.ratioWeight + ";"
 	}
 	toCompile += "}\
 				else {\
