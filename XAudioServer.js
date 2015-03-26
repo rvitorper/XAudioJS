@@ -183,7 +183,27 @@ XAudioServer.prototype.initializeMozAudio = function () {
     this.initializeResampler(XAudioJSMozAudioSampleRate);
 }
 XAudioServer.prototype.initializeWebAudio = function () {
-    if (!XAudioJSWebAudioLaunchedContext) {
+	/*
+		Firefox has a bug in its web audio implementation...
+		The node may randomly stop playing on Mac OS X for no
+		good reason. Keep a watchdog timer to restart the failed
+		node if it glitches. Google Chrome never had this issue.
+	*/
+    XAudioJSWebAudioWatchDogLast = new Date();
+	if (navigator.userAgent.indexOf('Gecko/') > -1) {
+		if (XAudioJSWebAudioWatchDogTimer) {
+			clearInterval(XAudioJSWebAudioWatchDogTimer);
+		}
+		var parentObj = this;
+		XAudioJSWebAudioWatchDogTimer = setInterval(
+		function () {
+			var timeDiff = (new Date()).getTime() - XAudioJSWebAudioWatchDogLast.getTime();
+			if (timeDiff > 500) {
+				parentObj.initializeWebAudio();
+			}
+		}, 500);
+	}
+	if (!XAudioJSWebAudioLaunchedContext) {
         try {
             XAudioJSWebAudioContextHandle = new AudioContext();								//Create a system audio context.
         }
@@ -369,6 +389,8 @@ function XAudioJSGenerateFlashMonoString() {	//Convert the array to one long str
 //Some Required Globals:
 var XAudioJSWebAudioContextHandle = null;
 var XAudioJSWebAudioAudioNode = null;
+var XAudioJSWebAudioWatchDogTimer = null;
+var XAudioJSWebAudioWatchDogLast = false;
 var XAudioJSWebAudioLaunchedContext = false;
 var XAudioJSAudioContextSampleBuffer = [];
 var XAudioJSResampledBuffer = [];
@@ -390,6 +412,9 @@ var XAudioJSFlashTransportEncoder = null;
 var XAudioJSMediaStreamLengthAliasCounter = 0;
 var XAudioJSBinaryString = [];
 function XAudioJSWebAudioEvent(event) {		//Web Audio API callback...
+	if (XAudioJSWebAudioWatchDogTimer) {
+		XAudioJSWebAudioWatchDogLast = new Date();
+	}
 	//Find all output channels:
 	for (var bufferCount = 0, buffers = []; bufferCount < XAudioJSChannelsAllocated; ++bufferCount) {
 		buffers[bufferCount] = event.outputBuffer.getChannelData(bufferCount);
