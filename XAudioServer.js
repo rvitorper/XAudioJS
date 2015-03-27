@@ -189,7 +189,7 @@ XAudioServer.prototype.initializeWebAudio = function () {
 		good reason. Keep a watchdog timer to restart the failed
 		node if it glitches. Google Chrome never had this issue.
 	*/
-    XAudioJSWebAudioWatchDogLast = new Date();
+    XAudioJSWebAudioWatchDogLast = (new Date()).getTime();
 	if (navigator.userAgent.indexOf('Gecko/') > -1) {
 		if (XAudioJSWebAudioWatchDogTimer) {
 			clearInterval(XAudioJSWebAudioWatchDogTimer);
@@ -197,8 +197,12 @@ XAudioServer.prototype.initializeWebAudio = function () {
 		var parentObj = this;
 		XAudioJSWebAudioWatchDogTimer = setInterval(
 		function () {
-			var timeDiff = (new Date()).getTime() - XAudioJSWebAudioWatchDogLast.getTime();
+			var timeDiff = (new Date()).getTime() - XAudioJSWebAudioWatchDogLast;
 			if (timeDiff > 500) {
+                try {
+                    console.log("Firefox web audio api glitch detected, resetting API...");
+                }
+                catch (e) {}
 				parentObj.initializeWebAudio();
 			}
 		}, 500);
@@ -413,7 +417,7 @@ var XAudioJSMediaStreamLengthAliasCounter = 0;
 var XAudioJSBinaryString = [];
 function XAudioJSWebAudioEvent(event) {		//Web Audio API callback...
 	if (XAudioJSWebAudioWatchDogTimer) {
-		XAudioJSWebAudioWatchDogLast = new Date();
+		XAudioJSWebAudioWatchDogLast = (new Date()).getTime();
 	}
 	//Find all output channels:
 	for (var bufferCount = 0, buffers = []; bufferCount < XAudioJSChannelsAllocated; ++bufferCount) {
